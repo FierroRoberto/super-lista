@@ -348,6 +348,119 @@ body {
   border-radius:var(--rad-sm); font-size:13px; font-weight:700; color:var(--text2);
   font-family:inherit; cursor:pointer; margin-top:8px;
 }
+/* ── FAB (botón flotante agregar) ── */
+.fab {
+  position:fixed; bottom:24px; right:50%;
+  transform:translateX(50%);
+  /* centrado en el max-width de 430px */
+  margin-right:calc(max(0px, (100vw - 430px) / -2));
+  background:var(--teal-mid); color:#fff;
+  border:none; border-radius:50px;
+  padding:13px 22px; font-size:15px; font-weight:800;
+  font-family:inherit; cursor:pointer;
+  display:flex; align-items:center; gap:8px;
+  box-shadow:0 4px 16px rgba(19,138,104,.45), 0 2px 6px rgba(0,0,0,.15);
+  z-index:150; transition:transform .15s, box-shadow .15s;
+  white-space:nowrap;
+}
+.fab:active { transform:translateX(50%) scale(.95); box-shadow:0 2px 8px rgba(19,138,104,.3); }
+.fab-icon { font-size:18px; line-height:1; }
+
+/* ── Add-item overlay ── */
+.add-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:flex; align-items:flex-end; justify-content:center;
+  z-index:200; animation:fadeIn .2s ease;
+}
+/* Step 1 — elegir tienda */
+.store-picker {
+  background:var(--surface); border-radius:var(--rad) var(--rad) 0 0;
+  padding:20px 20px 32px; width:100%; max-width:430px;
+  animation:slideUp .25s cubic-bezier(.4,0,.2,1);
+}
+.sheet-title {
+  font-size:16px; font-weight:800; margin-bottom:4px; letter-spacing:-.3px;
+}
+.sheet-sub {
+  font-size:12.5px; color:var(--text2); font-weight:500; margin-bottom:18px;
+}
+.store-options { display:flex; flex-direction:column; gap:9px; }
+.store-opt {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; border-radius:var(--rad-sm);
+  border:1.5px solid var(--border); cursor:pointer;
+  transition:all .15s; background:var(--surface);
+}
+.store-opt:active { opacity:.8; }
+.store-opt.so-0:active,.store-opt.so-0.selected { background:var(--teal-xlight);  border-color:var(--teal-mid); }
+.store-opt.so-1:active,.store-opt.so-1.selected { background:var(--amber-xlight); border-color:var(--amber-mid); }
+.store-opt.so-2:active,.store-opt.so-2.selected { background:var(--coral-xlight); border-color:var(--coral-mid); }
+.store-opt.so-3:active,.store-opt.so-3.selected { background:var(--purple-xlight);border-color:var(--purple-mid); }
+.store-opt-emoji { font-size:22px; }
+.store-opt-info { flex:1; }
+.store-opt-name { font-size:14px; font-weight:800; }
+.store-opt-count { font-size:11.5px; color:var(--text2); font-weight:500; margin-top:2px; }
+.store-opt-arrow { font-size:16px; color:var(--text3); }
+
+/* Step 2 — formulario del artículo */
+.add-form {
+  background:var(--surface); border-radius:var(--rad) var(--rad) 0 0;
+  padding:20px 20px 32px; width:100%; max-width:430px;
+  animation:slideUp .25s cubic-bezier(.4,0,.2,1);
+}
+.add-form-back {
+  display:flex; align-items:center; gap:6px; margin-bottom:14px;
+  background:none; border:none; cursor:pointer; padding:0;
+  font-size:13px; font-weight:700; color:var(--text2); font-family:inherit;
+}
+.form-store-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:12px; font-weight:700; padding:4px 10px;
+  border-radius:20px; margin-bottom:14px;
+}
+.fsb-0{background:var(--teal-xlight);color:var(--teal)}
+.fsb-1{background:var(--amber-xlight);color:var(--amber)}
+.fsb-2{background:var(--coral-xlight);color:var(--coral)}
+.fsb-3{background:var(--purple-xlight);color:var(--purple)}
+
+.form-row { margin-bottom:12px; }
+.form-label { font-size:11px; font-weight:700; color:var(--text2); margin-bottom:5px; text-transform:uppercase; letter-spacing:.5px; }
+.form-input {
+  width:100%; font-size:14px; font-family:inherit; font-weight:600;
+  padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--rad-sm);
+  background:var(--bg); color:var(--text); outline:none; transition:border-color .15s;
+}
+.form-input:focus { border-color:var(--teal-mid); background:var(--surface); }
+.form-input::placeholder { color:var(--text3); font-weight:500; }
+.form-row-2col { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+
+.add-confirm-btn {
+  width:100%; padding:13px; border:none; border-radius:var(--rad-sm);
+  font-size:15px; font-weight:800; font-family:inherit; cursor:pointer;
+  color:#fff; transition:opacity .15s; margin-top:4px;
+}
+.add-confirm-btn:active { opacity:.85; }
+.acb-0{background:var(--teal-mid)}
+.acb-1{background:var(--amber-mid)}
+.acb-2{background:var(--coral-mid)}
+.acb-3{background:var(--purple-mid)}
+
+.add-cancel-btn {
+  width:100%; padding:10px; background:none; border:1.5px solid var(--border);
+  border-radius:var(--rad-sm); font-size:13px; font-weight:700;
+  color:var(--text2); font-family:inherit; cursor:pointer; margin-top:8px;
+}
+/* Feedback toast */
+.toast {
+  position:fixed; bottom:88px; left:50%; transform:translateX(-50%);
+  background:var(--text); color:#fff; border-radius:50px;
+  padding:10px 20px; font-size:13px; font-weight:700;
+  z-index:300; white-space:nowrap;
+  animation:toastIn .25s ease, toastOut .3s ease 1.8s forwards;
+  pointer-events:none;
+}
+@keyframes toastIn  { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+@keyframes toastOut { from{opacity:1} to{opacity:0} }
 </style>
 </head>
 <body>
@@ -390,6 +503,29 @@ body {
 </nav>
 
 <main class="content" id="main-content"></main>
+
+<!-- FAB — Agregar artículo -->
+<button class="fab" id="fab-btn" onclick="openAddSheet()">
+  <span class="fab-icon">＋</span> Agregar artículo
+</button>
+
+<!-- OVERLAY Step 1: elegir tienda -->
+<div class="add-overlay" id="add-overlay-store" style="display:none" onclick="addOverlayClick(event,'add-overlay-store')">
+  <div class="store-picker">
+    <div class="sheet-title">¿A qué tienda lo agregas?</div>
+    <div class="sheet-sub">Selecciona el grupo donde irá el nuevo artículo</div>
+    <div class="store-options" id="store-options-list"></div>
+    <button class="add-cancel-btn" style="margin-top:14px" onclick="closeAddSheet()">Cancelar</button>
+  </div>
+</div>
+
+<!-- OVERLAY Step 2: formulario del artículo -->
+<div class="add-overlay" id="add-overlay-form" style="display:none" onclick="addOverlayClick(event,'add-overlay-form')">
+  <div class="add-form" id="add-form-content"></div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
 
 <!-- OAuth Sheet (overlay) -->
 <div class="oauth-overlay" id="oauth-overlay" style="display:none" onclick="oauthOverlayClick(event)">
@@ -501,6 +637,7 @@ const BASE_STORES = [
 let state = {
   checks:   { walmart:{}, sams:{}, heb:{}, frutas:{} },
   overrides: {},
+  customItems: {},
   driveToken:'', driveFileId:'',
   tokenSavedAt: null,
   lastSync:null
@@ -531,14 +668,19 @@ function save() {
    BUILD STORES (apply overrides)
 ═══════════════════════════════════════ */
 function buildStores() {
-  STORES = BASE_STORES.map(store => ({
-    ...store,
-    items: store.items.map((item, i) => {
-      const key = store.id + '_' + i;
-      const ov  = state.overrides[key] || {};
-      return { n: item.n, q: ov.q ?? item.q, p: ov.p ?? item.p };
-    })
-  }));
+  STORES = BASE_STORES.map(store => {
+    // Restaurar artículos personalizados guardados
+    const custom = (state.customItems && state.customItems[store.id]) || [];
+    const allItems = [...store.items, ...custom];
+    return {
+      ...store,
+      items: allItems.map((item, i) => {
+        const key = store.id + '_' + i;
+        const ov  = state.overrides[key] || {};
+        return { n: item.n, q: ov.q ?? item.q, p: ov.p ?? item.p };
+      })
+    };
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -945,7 +1087,7 @@ function scheduleDriveWrite() {
 async function writeToDrive() {
   if (!state.driveToken || !state.driveFileId) return;
   syncStatus = 'syncing'; updateSyncUI();
-  const body = JSON.stringify({ checks: state.checks, overrides: state.overrides, version: Date.now() });
+  const body = JSON.stringify({ checks: state.checks, overrides: state.overrides, customItems: state.customItems, version: Date.now() });
   try {
     const r = await fetch(
       `https://www.googleapis.com/upload/drive/v3/files/${state.driveFileId}?uploadType=media`,
@@ -966,8 +1108,9 @@ async function readFromDrive() {
     if (r.ok) {
       const data = await r.json();
       if (data.version && (!state.lastSync || data.version > state.lastSync)) {
-        if (data.checks)    state.checks    = data.checks;
-        if (data.overrides) state.overrides = data.overrides;
+        if (data.checks)      state.checks      = data.checks;
+        if (data.overrides)   state.overrides   = data.overrides;
+        if (data.customItems) state.customItems = data.customItems;
         state.lastSync = data.version;
         buildStores(); save(); render();
       }
@@ -1002,6 +1145,162 @@ function updateSyncUI() {
   } else {
     lbl.textContent = 'Sin Drive — modo local activo';
   }
+}
+
+/* ═══════════════════════════════════════
+   ADD ITEM FLOW
+═══════════════════════════════════════ */
+let addTargetStore = null;  // índice de tienda seleccionada
+
+function openAddSheet() {
+  // Construir opciones de tienda dinámicamente
+  const list = document.getElementById('store-options-list');
+  list.innerHTML = STORES.map((s, i) => `
+    <div class="store-opt so-${s.c}" onclick="selectAddStore(${i})">
+      <span class="store-opt-emoji">${s.emoji}</span>
+      <div class="store-opt-info">
+        <div class="store-opt-name">${s.name}</div>
+        <div class="store-opt-count">${s.items.length} artículos actualmente</div>
+      </div>
+      <span class="store-opt-arrow">›</span>
+    </div>`).join('');
+  document.getElementById('add-overlay-store').style.display = 'flex';
+}
+
+function selectAddStore(si) {
+  addTargetStore = si;
+  document.getElementById('add-overlay-store').style.display = 'none';
+  openAddForm(si);
+}
+
+function openAddForm(si) {
+  const s = STORES[si];
+  const hasPrices = s.prices;
+  document.getElementById('add-form-content').innerHTML = `
+    <button class="add-form-back" onclick="backToStorePicker()">‹ Cambiar tienda</button>
+    <div class="form-store-badge fsb-${s.c}">${s.emoji} ${s.name}</div>
+    <div class="sheet-title">Nuevo artículo</div>
+    <div class="sheet-sub" style="margin-bottom:16px">El artículo se agregará al final de la lista de ${s.name}</div>
+
+    <div class="form-row">
+      <div class="form-label">Nombre del artículo</div>
+      <input class="form-input" id="new-item-name" type="text"
+        placeholder="Ej. Leche deslactosada, Jabón líquido…"
+        autocomplete="off" maxlength="60"
+        onkeydown="if(event.key==='Enter') focusNext('new-item-qty')">
+    </div>
+
+    <div class="form-row-2col">
+      <div>
+        <div class="form-label">Piezas</div>
+        <input class="form-input" id="new-item-qty" type="number"
+          inputmode="numeric" min="1" max="99" value="1" placeholder="1"
+          onkeydown="if(event.key==='Enter') focusNext('new-item-price')">
+      </div>
+      ${hasPrices ? `<div>
+        <div class="form-label">Precio c/u ($)</div>
+        <input class="form-input" id="new-item-price" type="number"
+          inputmode="numeric" min="0" value="" placeholder="0"
+          onkeydown="if(event.key==='Enter') confirmAddItem()">
+      </div>` : `<div>
+        <div class="form-label">Precio c/u ($)</div>
+        <input class="form-input" id="new-item-price" type="number"
+          inputmode="numeric" disabled value="" placeholder="Sin precio"
+          style="opacity:.45;cursor:not-allowed">
+      </div>`}
+    </div>
+
+    <button class="add-confirm-btn acb-${s.c}" onclick="confirmAddItem()">
+      ＋ Agregar a ${s.name}
+    </button>
+    <button class="add-cancel-btn" onclick="closeAddSheet()">Cancelar</button>
+  `;
+  document.getElementById('add-overlay-form').style.display = 'flex';
+  setTimeout(() => {
+    const inp = document.getElementById('new-item-name');
+    if (inp) inp.focus();
+  }, 200);
+}
+
+function backToStorePicker() {
+  document.getElementById('add-overlay-form').style.display = 'none';
+  document.getElementById('add-overlay-store').style.display = 'flex';
+}
+
+function focusNext(id) {
+  const el = document.getElementById(id);
+  if (el) el.focus();
+}
+
+function confirmAddItem() {
+  const nameEl  = document.getElementById('new-item-name');
+  const qtyEl   = document.getElementById('new-item-qty');
+  const priceEl = document.getElementById('new-item-price');
+
+  const name  = nameEl ? nameEl.value.trim() : '';
+  const qty   = Math.max(1, parseInt(qtyEl ? qtyEl.value : '1', 10) || 1);
+  const price = priceEl && !priceEl.disabled ? (parseInt(priceEl.value, 10) || 0) : null;
+
+  // Validar nombre
+  if (!name) {
+    nameEl.style.borderColor = 'var(--coral-mid)';
+    nameEl.placeholder = '⚠️ Escribe el nombre del artículo';
+    nameEl.focus();
+    setTimeout(() => {
+      nameEl.style.borderColor = '';
+      nameEl.placeholder = 'Ej. Leche deslactosada, Jabón líquido…';
+    }, 2000);
+    return;
+  }
+
+  const si   = addTargetStore;
+  const s    = STORES[si];
+  const base = BASE_STORES[si];
+
+  // Agregar al array base
+  const newItem = { n: name, q: qty };
+  if (price !== null) newItem.p = price;
+  base.items.push(newItem);
+
+  // Reconstruir stores con overrides
+  buildStores();
+
+  // Guardar en state (persiste en localStorage y Drive)
+  if (!state.customItems) state.customItems = {};
+  if (!state.customItems[s.id]) state.customItems[s.id] = [];
+  state.customItems[s.id].push(newItem);
+  save();
+  scheduleDriveWrite();
+
+  closeAddSheet();
+  showToast(`✓ "${name}" agregado a ${s.name}`);
+
+  // Si la tab activa no es esta tienda, cambiar a ella para mostrar el artículo
+  if (activeTab !== si) {
+    setTab(si);
+  } else {
+    render();
+  }
+}
+
+function closeAddSheet() {
+  document.getElementById('add-overlay-store').style.display = 'none';
+  document.getElementById('add-overlay-form').style.display = 'none';
+  addTargetStore = null;
+}
+
+function addOverlayClick(e, id) {
+  if (e.target === document.getElementById(id)) closeAddSheet();
+}
+
+/* Toast notification */
+function showToast(msg) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
 }
 
 /* ═══════════════════════════════════════
