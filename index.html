@@ -1115,29 +1115,55 @@ async function writeToDrive() {
 async function readFromDrive() {
   if (!state.driveToken || !state.driveFileId) return;
   try {
+    // Cache-busting: forzar a Drive a devolver el archivo más reciente
+    const cacheBust = `&t=${Date.now()}`;
     const r = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${state.driveFileId}?alt=media`,
-      { headers:{'Authorization':'Bearer '+state.driveToken} }
+      `https://www.googleapis.com/drive/v3/files/${state.driveFileId}?alt=media${cacheBust}`,
+      {
+        headers: {
+          'Authorization': 'Bearer ' + state.driveToken,
+          'Cache-Control': 'no-cache, no-store',
+          'Pragma': 'no-cache'
+        }
+      }
     );
     if (r.ok) {
       const data = await r.json();
-      if (data.version && (!state.lastSync || data.version > state.lastSync)) {
+      // Comparar versión: si Drive tiene algo más reciente → aplicar
+      const driveVersion = data.version || 0;
+      const localVersion = state.lastSync  || 0;
+      if (driveVersion > localVersion) {
         if (data.checks)      state.checks      = data.checks;
         if (data.overrides)   state.overrides   = data.overrides;
         if (data.customItems) state.customItems = data.customItems;
-        state.lastSync = data.version;
-        buildStores(); save(); render();
+        state.lastSync = driveVersion;
+        buildStores();
+        save();
+        render();
+        // Notificación visual de que llegaron cambios
+        showToast('🔄 Lista actualizada desde el otro dispositivo');
       }
       syncStatus = 'ok';
-    } else syncStatus = 'error';
-  } catch(e) { syncStatus = 'error'; }
+    } else if (r.status === 401) {
+      syncStatus = 'error';
+      const lbl = document.getElementById('sync-label');
+      if (lbl) lbl.textContent = '⚠️ Token expirado — toca ⚙️ para renovar';
+    } else {
+      syncStatus = 'error';
+    }
+  } catch(e) {
+    syncStatus = 'error';
+  }
   updateSyncUI();
 }
+
 function triggerSync() { readFromDrive(); }
+
 function startPolling() {
   if (syncTimer) clearInterval(syncTimer);
   if (!state.driveToken || !state.driveFileId) return;
-  syncTimer = setInterval(readFromDrive, 30000);
+  // Polling cada 10 segundos (antes era 30)
+  syncTimer = setInterval(readFromDrive, 10000);
 }
 
 /* ═══════════════════════════════════════
@@ -1148,18 +1174,36 @@ function updateSyncUI() {
   const lbl = document.getElementById('sync-label');
   if (!dot || !lbl) return;
   dot.className = 'sync-dot';
+
+  if (!state.driveToken || !state.driveFileId) {
+    lbl.textContent = 'Sin Drive configurado — toca ⚙️';
+    return;
+  }
+
   if (syncStatus === 'ok') {
     dot.classList.add('ok');
-    const t = state.lastSync ? new Date(state.lastSync).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
-    lbl.textContent = t ? 'Sincronizado a las ' + t : 'Sincronizado';
+    if (state.lastSync) {
+      const ago = Math.round((Date.now() - state.lastSync) / 1000);
+      const agoTxt = ago < 60
+        ? `hace ${ago}s`
+        : `hace ${Math.round(ago/60)} min`;
+      lbl.textContent = `Sincronizado ${agoTxt}  ·  próximo en ~10s`;
+    } else {
+      lbl.textContent = 'Conectado a Drive';
+    }
   } else if (syncStatus === 'syncing') {
-    dot.classList.add('syncing'); lbl.textContent = 'Sincronizando…';
+    dot.classList.add('syncing');
+    lbl.textContent = 'Sincronizando con Drive…';
   } else if (syncStatus === 'error') {
-    dot.classList.add('error'); lbl.textContent = 'Error de sincronización — modo local';
+    dot.classList.add('error');
+    lbl.textContent = '⚠️ Error — verifica token en ⚙️';
   } else {
-    lbl.textContent = 'Sin Drive — modo local activo';
+    lbl.textContent = 'Conectando…';
   }
 }
+
+// Actualizar el "hace X segundos" cada 5 segundos sin llamar a Drive
+setInterval(() => { if (syncStatus === 'ok') updateSyncUI(); }, 5000);
 
 /* ═══════════════════════════════════════
    ADD ITEM FLOW
@@ -1341,6 +1385,18 @@ if (state.driveToken && state.driveFileId) {
   startPolling();
   setTimeout(triggerSync, 600);
 }
+
+// Sincronizar inmediatamente cuando el usuario regresa a la app
+// (minimizó, cambió de app, apagó pantalla y volvió)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.driveToken && state.driveFileId) {
+    readFromDrive();
+  }
+});
+// También al recuperar foco en desktop/web
+window.addEventListener('focus', () => {
+  if (state.driveToken && state.driveFileId) readFromDrive();
+});
 
 // Verificar expiración del token cada 2 minutos
 setInterval(checkTokenExpiry, 2 * 60 * 1000);
