@@ -475,6 +475,53 @@ body {
 }
 @keyframes toastIn  { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 @keyframes toastOut { from{opacity:1} to{opacity:0} }
+/* ── Sync bar clickable ── */
+.sync-bar { cursor:pointer; }
+.sync-bar:active { background:var(--border); }
+
+/* ── Diagnóstico Drive ── */
+.diag-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.6);
+  display:flex; align-items:flex-end; justify-content:center;
+  z-index:300; animation:fadeIn .2s ease;
+}
+.diag-sheet {
+  background:var(--surface); border-radius:var(--rad) var(--rad) 0 0;
+  padding:20px 20px 36px; width:100%; max-width:430px;
+  animation:slideUp .25s cubic-bezier(.4,0,.2,1);
+  max-height:88vh; overflow-y:auto;
+}
+.diag-title { font-size:16px; font-weight:800; margin-bottom:14px; }
+.diag-row {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 12px; border-radius:var(--rad-xs);
+  margin-bottom:6px; font-size:13px;
+}
+.diag-row.ok     { background:var(--teal-xlight); }
+.diag-row.fail   { background:var(--coral-xlight); }
+.diag-row.warn   { background:var(--amber-xlight); }
+.diag-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+.diag-text { flex:1; }
+.diag-text b { display:block; font-weight:800; margin-bottom:2px; color:var(--text); }
+.diag-text span { color:var(--text2); font-size:12px; font-weight:500; line-height:1.4; }
+.diag-fix-btn {
+  margin-top:10px; padding:8px 14px; border:none; border-radius:var(--rad-xs);
+  font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; width:100%;
+}
+.diag-fix-btn.teal   { background:var(--teal-mid);  color:#fff; }
+.diag-fix-btn.amber  { background:var(--amber-mid); color:#fff; }
+.diag-close {
+  width:100%; padding:11px; background:none; border:1.5px solid var(--border);
+  border-radius:var(--rad-sm); font-size:14px; font-weight:700; color:var(--text2);
+  font-family:inherit; cursor:pointer; margin-top:12px;
+}
+.diag-sync-now {
+  width:100%; padding:11px; background:var(--teal-mid); color:#fff;
+  border:none; border-radius:var(--rad-sm); font-size:14px; font-weight:800;
+  font-family:inherit; cursor:pointer; margin-bottom:8px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.diag-sync-now:active { opacity:.85; }
 </style>
 </head>
 <body>
@@ -494,10 +541,10 @@ body {
       <button class="icon-btn" onclick="toggleDrivePanel()" title="Configurar Drive">⚙️</button>
     </div>
   </div>
-  <div class="sync-bar">
+  <div class="sync-bar" id="sync-bar" onclick="syncBarTap()">
     <div class="sync-dot" id="sync-dot"></div>
-    <span class="sync-label" id="sync-label">Sin conexión a Drive — modo local</span>
-    <button class="sync-action" onclick="triggerSync()">↻ Sync</button>
+    <span class="sync-label" id="sync-label">Verificando configuración…</span>
+    <button class="sync-action" id="sync-btn" onclick="event.stopPropagation();manualSync()">↻ Sync</button>
   </div>
 </header>
 
@@ -541,47 +588,15 @@ body {
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<!-- OAuth Sheet (overlay) -->
-<div class="oauth-overlay" id="oauth-overlay" style="display:none" onclick="oauthOverlayClick(event)">
-  <div class="oauth-sheet">
-    <h2>🔑 Obtener Access Token</h2>
-    <p>El token de Google autoriza a la app para leer y escribir tu archivo de estado en Drive. Dura ~1 hora; renuévalo cuando el punto de sync se ponga rojo.</p>
+<!-- Diagnóstico Drive -->
+<div class="diag-overlay" id="diag-overlay" style="display:none" onclick="if(event.target===this)closeDiag()">
+  <div class="diag-sheet" id="diag-sheet"></div>
+</div>
 
-    <div class="oauth-steps">
-      <div class="oauth-step">
-        <div class="step-num">1</div>
-        <div class="step-txt">Toca <b>"Abrir OAuth Playground"</b> — se abre en el navegador</div>
-      </div>
-      <div class="oauth-step">
-        <div class="step-num">2</div>
-        <div class="step-txt">En la lista izquierda busca <b>Drive API v3</b> → marca <b>drive.file</b> → clic <b>"Authorize APIs"</b></div>
-      </div>
-      <div class="oauth-step">
-        <div class="step-num">3</div>
-        <div class="step-txt">Inicia sesión con tu cuenta Google (la misma donde está el archivo)</div>
-      </div>
-      <div class="oauth-step">
-        <div class="step-num">4</div>
-        <div class="step-txt">Clic en <b>"Exchange authorization code for tokens"</b></div>
-      </div>
-      <div class="oauth-step">
-        <div class="step-num">5</div>
-        <div class="step-txt">Copia el <b>Access token</b> (empieza con <b>ya29.</b>) y pégalo abajo</div>
-      </div>
-    </div>
-
-    <button class="oauth-open-btn" onclick="openOAuthPlayground()">
-      Abrir OAuth Playground →
-    </button>
-
-    <div class="oauth-paste-row">
-      <input class="oauth-paste-input" id="oauth-token-input"
-        placeholder="Pega aquí el token  ya29.xxxxx…"
-        type="password" autocomplete="off">
-      <button class="oauth-paste-btn" onclick="applyOAuthToken()">Guardar</button>
-    </div>
-
-    <button class="oauth-cancel" onclick="closeOAuthSheet()">Cancelar</button>
+<!-- OAuth Sheet — flujo completo con refresh automático -->
+<div class="oauth-overlay" id="oauth-overlay" style="display:none" onclick="if(event.target===this)closeOAuthSheet()">
+  <div class="oauth-sheet" id="oauth-sheet-content">
+    <!-- Se rellena dinámicamente por renderOAuthSheet() -->
   </div>
 </div>
 
@@ -653,7 +668,9 @@ let state = {
   overrides: {},
   customItems: {},
   driveToken:'', driveFileId:'',
+  refreshToken: '',
   tokenSavedAt: null,
+  oauthClientId:'', oauthClientSecret:'', oauthGasUrl:'',
   lastSync:null
 };
 let STORES = [];          // computed: BASE_STORES + overrides applied
@@ -909,11 +926,44 @@ function tokenStatus() {
 
 function renderDrivePanel() {
   if (!showDrive) return '';
-  const ts = tokenStatus();
-  const hasToken = !!state.driveToken;
-  const hasFile  = !!state.driveFileId;
+
+  const hasRefresh = !!state.refreshToken;
+  const hasToken   = !!state.driveToken;
+  const hasFile    = !!state.driveFileId;
+  const hasOAuth   = !!(state.oauthClientId && state.oauthClientSecret && state.oauthGasUrl);
+
+  // Estado de conexión
+  let statusHtml = '';
+  if (hasRefresh && hasToken && hasFile) {
+    const age = state.tokenSavedAt ? Math.round((Date.now()-state.tokenSavedAt)/60000) : null;
+    statusHtml = `<div class="diag-row ok" style="margin-bottom:12px">
+      <span class="diag-icon">🟢</span>
+      <div class="diag-text">
+        <b>Conexión activa — token se renueva solo</b>
+        <span>Token vigente${age!==null?' ('+age+' min)':''} · Sync cada 10 seg</span>
+      </div>
+    </div>`;
+  } else if (!hasOAuth) {
+    statusHtml = `<div class="diag-row fail" style="margin-bottom:12px">
+      <span class="diag-icon">⚠️</span>
+      <div class="diag-text">
+        <b>Faltan credenciales OAuth</b>
+        <span>Completa los 3 campos de la sección 1 para conectar.</span>
+      </div>
+    </div>`;
+  } else if (!hasRefresh) {
+    statusHtml = `<div class="diag-row warn" style="margin-bottom:12px">
+      <span class="diag-icon">🔑</span>
+      <div class="diag-text">
+        <b>Credenciales OK — falta autorizar</b>
+        <span>Toca "Iniciar sesión con Google" abajo para completar la conexión.</span>
+      </div>
+    </div>`;
+  }
 
   return `<div class="drive-panel">
+
+    <!-- Encabezado -->
     <div class="drive-header">
       <svg class="drive-logo" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
         <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0a7.9 7.9 0 003.3 3.3z" fill="#0066DA"/>
@@ -924,44 +974,79 @@ function renderDrivePanel() {
         <path d="M73.4 26.45l-13.1-22.7a7.9 7.9 0 00-2.9-2.55L43.65 25l15.95 28.45H87.1a7.9 7.9 0 000-7.9z" fill="#FFBA00"/>
       </svg>
       <div style="flex:1">
-        <div class="drive-title-txt">Google Drive Sync</div>
-        <div class="drive-subtitle">Sincronización entre dispositivos</div>
+        <div class="drive-title-txt">Configuración de Google Drive</div>
+        <div class="drive-subtitle">Sincronización permanente entre dispositivos</div>
       </div>
     </div>
 
-    <!-- Token status pill -->
-    <div class="token-pill ${ts.cls}">${ts.label}</div>
+    ${statusHtml}
 
-    <!-- Botón principal: obtener / renovar token -->
-    <button class="oauth-btn ${hasToken ? 'renew' : 'google'}" onclick="showOAuthSheet()">
-      ${hasToken ? '🔄 Renovar Access Token' : googleSVG() + ' Obtener token con Google'}
-    </button>
-
-    <div class="or-divider">o pega el token manualmente</div>
-
-    <div class="field-group">
-      <div class="field-label">Access Token</div>
-      <input class="field-input" id="fi-token" type="password"
-        placeholder="ya29.xxxxx…" value="${state.driveToken || ''}">
+    <!-- SECCIÓN 1: Credenciales OAuth -->
+    <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">
+      1 · Credenciales OAuth (de Google Cloud Console)
     </div>
 
     <div class="field-group">
-      <div class="field-label">File ID del archivo de estado en Drive</div>
+      <div class="field-label">Client ID</div>
+      <input class="field-input" id="fi-clientid"
+        placeholder="123456789-xxxx.apps.googleusercontent.com"
+        value="${state.oauthClientId || ''}">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Client Secret</div>
+      <input class="field-input" id="fi-secret" type="password"
+        placeholder="GOCSPX-xxxxxxxxxx"
+        value="${state.oauthClientSecret || ''}">
+    </div>
+    <div class="field-group">
+      <div class="field-label">URL del Apps Script (gas_proxy.js)</div>
+      <input class="field-input" id="fi-gas"
+        placeholder="https://script.google.com/macros/s/xxxx/exec"
+        value="${state.oauthGasUrl || ''}">
+      <div style="font-size:11px;color:var(--text3);margin-top:3px;font-weight:500">
+        Obtén esta URL al desplegar gas_proxy.js en script.google.com
+      </div>
+    </div>
+
+    <!-- SECCIÓN 2: File ID -->
+    <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px">
+      2 · Archivo de estado en Google Drive
+    </div>
+    <div class="field-group">
+      <div class="field-label">File ID del archivo super_estado.json</div>
       <input class="field-input" id="fi-fileid"
         placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
         value="${state.driveFileId || ''}">
-      <div style="font-size:11px;color:var(--text3);margin-top:4px;font-weight:500">
-        Está en la URL de Drive: …/file/d/<b style="color:var(--text2)">ESTE_ES_EL_ID</b>/view
+      <div style="font-size:11px;color:var(--text3);margin-top:3px;font-weight:500">
+        URL de Drive: …/file/d/<b style="color:var(--text2)">ESTE_ES_EL_ID</b>/view
       </div>
     </div>
 
-    <button class="save-btn" onclick="saveDriveConfig()">
-      ${hasToken && hasFile ? '✓ Actualizar configuración' : 'Guardar y conectar'}
+    <!-- SECCIÓN 3: Botón de guardar + autorizar -->
+    <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px">
+      3 · Guardar y autorizar
+    </div>
+    <button class="save-btn" style="margin-bottom:8px" onclick="saveAllDriveConfig()">
+      💾 Guardar configuración
     </button>
 
+    ${hasOAuth && !hasRefresh ? `
+    <button class="oauth-btn google" onclick="saveAllDriveConfig(true)">
+      ${googleSVG()} &nbsp; Iniciar sesión con Google →
+    </button>` : ''}
+
+    ${hasRefresh ? `
+    <div style="display:flex;gap:8px;margin-top:0">
+      <button class="diag-fix-btn teal" style="flex:1" onclick="refreshAccessToken().then(ok=>{ if(ok){toggleDrivePanel();showToast('✅ Token renovado');startPolling();triggerSync();}else showToast('❌ Error al renovar')})">
+        ↻ Renovar token
+      </button>
+      <button class="diag-fix-btn amber" style="flex:1" onclick="revokeAuth()">
+        🚫 Desconectar
+      </button>
+    </div>` : ''}
+
     <div class="drive-hint" style="margin-top:10px">
-      Los cambios (checks, cantidades, precios) se sincronizan automáticamente cada 30 seg.<br>
-      Usa el mismo File ID en ambos celulares.
+      Solo necesitas configurar esto <b>una vez</b> por dispositivo. El token se renueva solo cada 50 min.
     </div>
   </div>`;
 }
@@ -994,78 +1079,258 @@ function render() {
 }
 
 /* ═══════════════════════════════════════
-   OAUTH FLOW
+   OAUTH — FLUJO COMPLETO CON AUTO-REFRESH
+   Usa Google Apps Script como proxy para
+   renovar el token sin expirar nunca.
 ═══════════════════════════════════════ */
-const OAUTH_PLAYGROUND = 'https://developers.google.com/oauthplayground';
 
-function showOAuthSheet() {
-  const overlay = document.getElementById('oauth-overlay');
-  if (overlay) {
-    overlay.style.display = 'flex';
-    setTimeout(() => {
-      const inp = document.getElementById('oauth-token-input');
-      if (inp) inp.focus();
-    }, 300);
+// ── Configuración OAuth ──
+// CLIENT_ID y CLIENT_SECRET se obtienen de Google Cloud Console
+// GAS_URL es la URL del Apps Script desplegado (ver gas_proxy.js)
+let OAUTH_CFG = {
+  clientId:     state.oauthClientId     || '',
+  clientSecret: state.oauthClientSecret || '',
+  gasUrl:       state.oauthGasUrl       || ''
+};
+
+const OAUTH_SCOPES   = 'https://www.googleapis.com/auth/drive.file';
+const OAUTH_TOKEN_EP = 'https://oauth2.googleapis.com/token';
+
+/* Renderiza la hoja OAuth según el estado actual */
+function renderOAuthSheet() {
+  const sheet = document.getElementById('oauth-sheet-content');
+  if (!sheet) return;
+
+  const hasRefresh = !!state.refreshToken;
+  const hasConfig  = !!(OAUTH_CFG.clientId && OAUTH_CFG.clientSecret && OAUTH_CFG.gasUrl);
+
+  if (!hasConfig) {
+    // PASO 0: falta configurar credenciales
+    sheet.innerHTML = `
+      <h2>🔑 Configurar Google OAuth</h2>
+      <p style="font-size:12.5px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+        Solo necesitas hacer esto <b>una vez</b>. Después el token se renueva automáticamente para siempre.
+      </p>
+      <div class="oauth-steps">
+        <div class="oauth-step"><div class="step-num">1</div>
+          <div class="step-txt">Ve a <a href="https://console.cloud.google.com" target="_blank" style="color:var(--teal);font-weight:700">console.cloud.google.com</a> → crea proyecto → habilita <b>Drive API</b></div></div>
+        <div class="oauth-step"><div class="step-num">2</div>
+          <div class="step-txt">Credenciales → <b>OAuth 2.0 → Aplicación web</b> → agrega tu URL de GitHub Pages en "Orígenes autorizados" y en "URIs de redireccionamiento"</div></div>
+        <div class="oauth-step"><div class="step-num">3</div>
+          <div class="step-txt">Copia el <b>Client ID</b> y <b>Client Secret</b> y pégalos abajo</div></div>
+        <div class="oauth-step"><div class="step-num">4</div>
+          <div class="step-txt">Despliega el archivo <b>gas_proxy.js</b> en Google Apps Script y pega la URL aquí</div></div>
+      </div>
+      <div class="field-group" style="margin-top:12px">
+        <div class="field-label">Client ID</div>
+        <input class="form-input" id="oa-clientid" placeholder="xxxxx.apps.googleusercontent.com" value="${OAUTH_CFG.clientId}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Client Secret</div>
+        <input class="form-input" id="oa-secret" type="password" placeholder="GOCSPX-xxxxx" value="${OAUTH_CFG.clientSecret}">
+      </div>
+      <div class="field-group">
+        <div class="field-label">URL del Apps Script (gas_proxy.js)</div>
+        <input class="form-input" id="oa-gas" placeholder="https://script.google.com/macros/s/xxxx/exec" value="${OAUTH_CFG.gasUrl}">
+      </div>
+      <button class="oauth-open-btn" onclick="saveOAuthConfig()">Guardar credenciales →</button>
+      <button class="oauth-cancel" onclick="closeOAuthSheet()">Cancelar</button>`;
+  } else if (!hasRefresh) {
+    // PASO 1: autorizar con Google (primera vez)
+    sheet.innerHTML = `
+      <h2>🔑 Autorizar con Google</h2>
+      <p style="font-size:12.5px;color:var(--text2);margin-bottom:16px;line-height:1.5">
+        Toca el botón para iniciar sesión con Google. Solo lo harás <b>una vez</b> — después el token se renueva solo.
+      </p>
+      <div class="diag-row ok" style="margin-bottom:14px">
+        <span class="diag-icon">✅</span>
+        <div class="diag-text"><b>Credenciales configuradas</b><span>Client ID y Apps Script listos.</span></div>
+      </div>
+      <button class="oauth-open-btn" onclick="startOAuthFlow()">
+        ${googleSVG()} &nbsp; Iniciar sesión con Google
+      </button>
+      <button class="oauth-btn renew" style="margin-top:8px" onclick="showOAuthConfigStep()">⚙️ Cambiar credenciales</button>
+      <button class="oauth-cancel" onclick="closeOAuthSheet()">Cancelar</button>`;
+  } else {
+    // AUTORIZADO: mostrar estado y opción de revocar
+    const age = state.tokenSavedAt ? Math.round((Date.now()-state.tokenSavedAt)/60000) : null;
+    sheet.innerHTML = `
+      <h2>✅ Conexión activa</h2>
+      <p style="font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+        El token se renueva automáticamente. No necesitas hacer nada.
+      </p>
+      <div class="diag-row ok" style="margin-bottom:8px">
+        <span class="diag-icon">🔑</span>
+        <div class="diag-text"><b>Refresh token guardado</b><span>Token permanente activo. Se renueva cada 50 min.</span></div>
+      </div>
+      <div class="diag-row ok" style="margin-bottom:14px">
+        <span class="diag-icon">⏱️</span>
+        <div class="diag-text"><b>Access token ${age!==null&&age<58?'vigente':'—'}</b><span>${age!==null?`Obtenido hace ${age} min.`:'Se obtendrá al conectar.'}</span></div>
+      </div>
+      <button class="oauth-open-btn" onclick="refreshAccessToken().then(()=>{closeOAuthSheet();showToast('✅ Token renovado')})">↻ Renovar token ahora</button>
+      <button class="oauth-btn renew" style="margin-top:8px" onclick="revokeAuth()">🚫 Desconectar cuenta</button>
+      <button class="oauth-cancel" onclick="closeOAuthSheet()">Cerrar</button>`;
   }
 }
+
+function showOAuthSheet() {
+  renderOAuthSheet();
+  document.getElementById('oauth-overlay').style.display = 'flex';
+}
 function closeOAuthSheet() {
-  const overlay = document.getElementById('oauth-overlay');
-  if (overlay) overlay.style.display = 'none';
+  document.getElementById('oauth-overlay').style.display = 'none';
 }
-function oauthOverlayClick(e) {
-  // Cerrar al tocar fuera del sheet
-  if (e.target === document.getElementById('oauth-overlay')) closeOAuthSheet();
+function showOAuthConfigStep() {
+  OAUTH_CFG.clientId = ''; OAUTH_CFG.clientSecret = ''; OAUTH_CFG.gasUrl = '';
+  renderOAuthSheet();
 }
-function openOAuthPlayground() {
-  window.open(OAUTH_PLAYGROUND, '_blank');
+
+/* Guardar credenciales (paso 0) */
+function saveOAuthConfig() {
+  const cid = document.getElementById('oa-clientid').value.trim();
+  const sec = document.getElementById('oa-secret').value.trim();
+  const gas = document.getElementById('oa-gas').value.trim();
+  if (!cid || !sec || !gas) { showToast('⚠️ Completa los 3 campos'); return; }
+  OAUTH_CFG = { clientId:cid, clientSecret:sec, gasUrl:gas };
+  state.oauthClientId     = cid;
+  state.oauthClientSecret = sec;
+  state.oauthGasUrl       = gas;
+  save();
+  renderOAuthSheet();
 }
+
+/* Iniciar flujo OAuth — abre popup de Google */
+function startOAuthFlow() {
+  const params = new URLSearchParams({
+    client_id:     OAUTH_CFG.clientId,
+    redirect_uri:  location.origin + location.pathname,
+    response_type: 'code',
+    scope:         OAUTH_SCOPES,
+    access_type:   'offline',
+    prompt:        'consent'   // fuerza refresh_token siempre
+  });
+  // Guardar flag para detectar el redirect al volver
+  sessionStorage.setItem('oauth_pending', '1');
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+/* Maneja el código de autorización que Google envía en la URL */
+async function handleOAuthCallback() {
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('code');
+  if (!code || !sessionStorage.getItem('oauth_pending')) return false;
+  sessionStorage.removeItem('oauth_pending');
+
+  // Limpiar URL sin recargar
+  history.replaceState(null, '', location.pathname);
+
+  showToast('🔄 Obteniendo tokens…');
+
+  try {
+    // Intercambiar code por access_token + refresh_token via Apps Script proxy
+    const r = await fetch(OAUTH_CFG.gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:        'exchange',
+        code:          code,
+        client_id:     OAUTH_CFG.clientId,
+        client_secret: OAUTH_CFG.clientSecret,
+        redirect_uri:  location.origin + location.pathname
+      })
+    });
+    const data = await r.json();
+    if (data.access_token) {
+      state.driveToken    = data.access_token;
+      state.refreshToken  = data.refresh_token || state.refreshToken;
+      state.tokenSavedAt  = Date.now();
+      save();
+      showToast('✅ Conectado con Google Drive');
+      if (state.driveFileId) { startPolling(); triggerSync(); }
+      render();
+      return true;
+    } else {
+      showToast('❌ Error al obtener token: ' + (data.error || 'desconocido'));
+    }
+  } catch(e) {
+    showToast('❌ Error de red al conectar');
+  }
+  return false;
+}
+
+/* Renovar access_token usando refresh_token (via Apps Script proxy) */
+async function refreshAccessToken() {
+  if (!state.refreshToken || !OAUTH_CFG.gasUrl) return false;
+  try {
+    const r = await fetch(OAUTH_CFG.gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:        'refresh',
+        refresh_token: state.refreshToken,
+        client_id:     OAUTH_CFG.clientId,
+        client_secret: OAUTH_CFG.clientSecret
+      })
+    });
+    const data = await r.json();
+    if (data.access_token) {
+      state.driveToken   = data.access_token;
+      state.tokenSavedAt = Date.now();
+      save();
+      updateSyncUI();
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+/* Auto-refresh: renovar 5 min antes de que expire (cada 50 min) */
+async function autoRefreshIfNeeded() {
+  if (!state.refreshToken || !state.tokenSavedAt) return;
+  const age = Date.now() - state.tokenSavedAt;
+  if (age > 50 * 60 * 1000) {   // más de 50 min → renovar
+    const ok = await refreshAccessToken();
+    if (ok) console.log('[OAuth] Token renovado automáticamente');
+    else     syncStatus = 'error';
+    updateSyncUI();
+  }
+}
+
+function revokeAuth() {
+  if (!confirm('¿Desconectar la cuenta de Google? Se borrará el token guardado.')) return;
+  state.driveToken   = '';
+  state.refreshToken = '';
+  state.tokenSavedAt = null;
+  save(); closeOAuthSheet(); render();
+  syncStatus = 'offline'; updateSyncUI();
+}
+
+/* Mantener compatibilidad con botón "applyOAuthToken" legado */
 function applyOAuthToken() {
   const inp = document.getElementById('oauth-token-input');
   if (!inp) return;
   const token = inp.value.trim();
-  if (!token || !token.startsWith('ya29.')) {
-    inp.style.borderColor = 'var(--coral-mid)';
-    inp.placeholder = '⚠️ El token debe empezar con ya29.';
-    setTimeout(() => {
-      inp.style.borderColor = '';
-      inp.placeholder = 'Pega aquí el token  ya29.xxxxx…';
-    }, 2500);
-    return;
-  }
+  if (!token) return;
   state.driveToken   = token;
   state.tokenSavedAt = Date.now();
-  save();
-  closeOAuthSheet();
-  // Actualizar input del panel si está visible
-  const fi = document.getElementById('fi-token');
-  if (fi) fi.value = token;
-  // Re-render panel con nuevo estado
-  render();
-  // Si ya tenemos fileId, conectar y sincronizar
-  if (state.driveFileId) {
-    syncStatus = 'syncing';
-    updateSyncUI();
-    startPolling();
-    triggerSync();
-  }
+  save(); closeOAuthSheet(); render();
+  if (state.driveFileId) { startPolling(); triggerSync(); }
 }
 
-/* Token expiry watcher — avisa en sync bar cuando queda poco */
-function checkTokenExpiry() {
+/* Watcher de expiración — ahora intenta auto-renovar en lugar de solo avisar */
+async function checkTokenExpiry() {
   if (!state.driveToken || !state.tokenSavedAt) return;
   const age = Date.now() - state.tokenSavedAt;
-  const WARN_AT = 50 * 60 * 1000;   // avisa a los 50 min
-  const EXPIRE  = 60 * 60 * 1000;   // expira ~60 min
-  if (age >= EXPIRE) {
-    syncStatus = 'error';
-    const lbl = document.getElementById('sync-label');
-    if (lbl) lbl.textContent = '⚠️ Token expirado — toca ⚙️ para renovar';
-    updateSyncUI();
-  } else if (age >= WARN_AT) {
-    const lbl = document.getElementById('sync-label');
-    if (lbl) {
-      const minLeft = Math.round((EXPIRE - age) / 60000);
-      lbl.textContent = `⚠️ Token expira en ~${minLeft} min — toca ⚙️`;
+  if (age > 50 * 60 * 1000) {
+    if (state.refreshToken && OAUTH_CFG.gasUrl) {
+      // Tenemos refresh token → renovar silenciosamente
+      await autoRefreshIfNeeded();
+    } else {
+      // Sin refresh token → avisar al usuario
+      syncStatus = 'error';
+      const lbl = document.getElementById('sync-label');
+      if (lbl) lbl.textContent = '⚠️ Token expirado — toca aquí para renovar';
+      updateSyncUI();
     }
   }
 }
@@ -1076,22 +1341,49 @@ function checkTokenExpiry() {
 function toggleDrivePanel() {
   showDrive = !showDrive;
   render();
-  if (showDrive) setTimeout(() => { const el = document.getElementById('fi-token'); if(el) el.focus(); }, 80);
+  if (showDrive) setTimeout(() => {
+    const el = document.getElementById('fi-clientid') || document.getElementById('fi-fileid');
+    if (el) el.focus();
+  }, 80);
 }
-function saveDriveConfig() {
-  const newToken = document.getElementById('fi-token').value.trim();
-  if (newToken && newToken !== state.driveToken) {
-    state.driveToken   = newToken;
-    state.tokenSavedAt = Date.now();
+
+/* Guarda todos los campos del panel unificado */
+function saveAllDriveConfig(thenAuthorize = false) {
+  const cid  = (document.getElementById('fi-clientid')?.value || '').trim();
+  const sec  = (document.getElementById('fi-secret')?.value   || '').trim();
+  const gas  = (document.getElementById('fi-gas')?.value      || '').trim();
+  const fid  = (document.getElementById('fi-fileid')?.value   || '').trim();
+
+  // Guardar credenciales OAuth si las proporcionaron
+  if (cid)  { state.oauthClientId     = cid; OAUTH_CFG.clientId     = cid; }
+  if (sec)  { state.oauthClientSecret = sec; OAUTH_CFG.clientSecret = sec; }
+  if (gas)  { state.oauthGasUrl       = gas; OAUTH_CFG.gasUrl       = gas; }
+  if (fid)  { state.driveFileId       = fid; }
+
+  save();
+  showToast('✅ Configuración guardada');
+
+  if (thenAuthorize) {
+    // Cerrar panel y lanzar flujo OAuth
+    showDrive = false;
+    render();
+    setTimeout(() => startOAuthFlow(), 300);
+    return;
   }
-  state.driveFileId = document.getElementById('fi-fileid').value.trim();
-  save(); showDrive = false;
-  if (state.driveToken && state.driveFileId) { startPolling(); triggerSync(); }
+
+  // Si ya tiene refresh token, reconectar
+  if (state.refreshToken && state.driveToken && state.driveFileId) {
+    startPolling();
+    triggerSync();
+  }
   render();
 }
 
+/* Mantener compatibilidad con código legacy */
+function saveDriveConfig() { saveAllDriveConfig(false); }
+
 /* ═══════════════════════════════════════
-   DRIVE SYNC  (checks + overrides)
+   DRIVE SYNC
 ═══════════════════════════════════════ */
 function scheduleDriveWrite() {
   if (!state.driveToken || !state.driveFileId) return;
@@ -1101,35 +1393,29 @@ function scheduleDriveWrite() {
 async function writeToDrive() {
   if (!state.driveToken || !state.driveFileId) return;
   syncStatus = 'syncing'; updateSyncUI();
-  const body = JSON.stringify({ checks: state.checks, overrides: state.overrides, customItems: state.customItems, version: Date.now() });
+  const body = JSON.stringify({ checks:state.checks, overrides:state.overrides, customItems:state.customItems, version:Date.now() });
   try {
     const r = await fetch(
       `https://www.googleapis.com/upload/drive/v3/files/${state.driveFileId}?uploadType=media`,
       { method:'PATCH', headers:{'Authorization':'Bearer '+state.driveToken,'Content-Type':'application/json'}, body }
     );
     if (r.ok) { state.lastSync = Date.now(); syncStatus = 'ok'; save(); }
+    else if (r.status === 401) { syncStatus = 'error'; showToast('⚠️ Token expirado — toca la barra de sync'); }
     else syncStatus = 'error';
   } catch(e) { syncStatus = 'error'; }
   updateSyncUI();
 }
 async function readFromDrive() {
-  if (!state.driveToken || !state.driveFileId) return;
+  if (!state.driveToken || !state.driveFileId) { syncStatus='offline'; updateSyncUI(); return; }
+  // Auto-renovar token si tiene más de 50 minutos
+  await autoRefreshIfNeeded();
   try {
-    // Cache-busting: forzar a Drive a devolver el archivo más reciente
-    const cacheBust = `&t=${Date.now()}`;
     const r = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${state.driveFileId}?alt=media${cacheBust}`,
-      {
-        headers: {
-          'Authorization': 'Bearer ' + state.driveToken,
-          'Cache-Control': 'no-cache, no-store',
-          'Pragma': 'no-cache'
-        }
-      }
+      `https://www.googleapis.com/drive/v3/files/${state.driveFileId}?alt=media&t=${Date.now()}`,
+      { headers:{ 'Authorization':'Bearer '+state.driveToken, 'Cache-Control':'no-cache, no-store', 'Pragma':'no-cache' } }
     );
     if (r.ok) {
       const data = await r.json();
-      // Comparar versión: si Drive tiene algo más reciente → aplicar
       const driveVersion = data.version || 0;
       const localVersion = state.lastSync  || 0;
       if (driveVersion > localVersion) {
@@ -1137,73 +1423,116 @@ async function readFromDrive() {
         if (data.overrides)   state.overrides   = data.overrides;
         if (data.customItems) state.customItems = data.customItems;
         state.lastSync = driveVersion;
-        buildStores();
-        save();
-        render();
-        // Notificación visual de que llegaron cambios
+        buildStores(); save(); render();
         showToast('🔄 Lista actualizada desde el otro dispositivo');
       }
       syncStatus = 'ok';
     } else if (r.status === 401) {
       syncStatus = 'error';
-      const lbl = document.getElementById('sync-label');
-      if (lbl) lbl.textContent = '⚠️ Token expirado — toca ⚙️ para renovar';
     } else {
       syncStatus = 'error';
     }
-  } catch(e) {
-    syncStatus = 'error';
-  }
+  } catch(e) { syncStatus = 'error'; }
   updateSyncUI();
 }
-
 function triggerSync() { readFromDrive(); }
-
+function manualSync() {
+  const btn = document.getElementById('sync-btn');
+  if (btn) { btn.textContent='…'; setTimeout(()=>btn.textContent='↻ Sync', 2000); }
+  if (!state.driveToken || !state.driveFileId) { showDiag(); return; }
+  readFromDrive();
+}
 function startPolling() {
   if (syncTimer) clearInterval(syncTimer);
   if (!state.driveToken || !state.driveFileId) return;
-  // Polling cada 10 segundos (antes era 30)
   syncTimer = setInterval(readFromDrive, 10000);
 }
 
-/* ═══════════════════════════════════════
-   SYNC UI
-═══════════════════════════════════════ */
+/* ── Sync UI ── */
 function updateSyncUI() {
   const dot = document.getElementById('sync-dot');
   const lbl = document.getElementById('sync-label');
   if (!dot || !lbl) return;
   dot.className = 'sync-dot';
-
   if (!state.driveToken || !state.driveFileId) {
-    lbl.textContent = 'Sin Drive configurado — toca ⚙️';
-    return;
+    lbl.textContent = '⚙️ Toca aquí para configurar Drive'; return;
   }
-
   if (syncStatus === 'ok') {
     dot.classList.add('ok');
     if (state.lastSync) {
       const ago = Math.round((Date.now() - state.lastSync) / 1000);
-      const agoTxt = ago < 60
-        ? `hace ${ago}s`
-        : `hace ${Math.round(ago/60)} min`;
-      lbl.textContent = `Sincronizado ${agoTxt}  ·  próximo en ~10s`;
-    } else {
-      lbl.textContent = 'Conectado a Drive';
-    }
+      lbl.textContent = ago < 60 ? `Sync hace ${ago}s — próximo en ~10s` : `Sync hace ${Math.round(ago/60)}min`;
+    } else { lbl.textContent = 'Conectado — esperando cambios'; }
   } else if (syncStatus === 'syncing') {
-    dot.classList.add('syncing');
-    lbl.textContent = 'Sincronizando con Drive…';
+    dot.classList.add('syncing'); lbl.textContent = 'Sincronizando con Drive…';
   } else if (syncStatus === 'error') {
-    dot.classList.add('error');
-    lbl.textContent = '⚠️ Error — verifica token en ⚙️';
+    dot.classList.add('error'); lbl.textContent = '⚠️ Error — toca aquí para diagnosticar';
   } else {
-    lbl.textContent = 'Conectando…';
+    lbl.textContent = '⚙️ Toca aquí para configurar Drive';
   }
 }
-
-// Actualizar el "hace X segundos" cada 5 segundos sin llamar a Drive
 setInterval(() => { if (syncStatus === 'ok') updateSyncUI(); }, 5000);
+function syncBarTap() {
+  if (!state.driveToken || !state.driveFileId || syncStatus === 'error') showDiag();
+  else manualSync();
+}
+
+/* ═══════════════════════════════════════
+   DIAGNÓSTICO
+═══════════════════════════════════════ */
+function showDiag() {
+  const sheet = document.getElementById('diag-sheet');
+  if (!sheet) return;
+  const hasToken  = !!state.driveToken;
+  const hasFileId = !!state.driveFileId;
+  const tokenAge  = state.tokenSavedAt ? Math.round((Date.now()-state.tokenSavedAt)/60000) : null;
+  const tokenOk   = hasToken && (tokenAge===null || tokenAge < 58);
+  let rows = '';
+  if (!hasToken) {
+    rows += diagRow('fail','🔑','Sin Access Token','El token de Google Drive no está configurado. Abre ⚙️ → "Obtener token con Google".');
+  } else if (!tokenOk) {
+    rows += diagRow('warn','⏰',`Token con ${tokenAge} min — posiblemente expirado`,'Los tokens duran ~60 min. Renuévalo en ⚙️ → "Renovar Access Token".');
+  } else {
+    rows += diagRow('ok','✅',`Token activo (${tokenAge ?? '?'} min)`,`Guardado hace ${tokenAge ?? '?'} minutos, aún válido.`);
+  }
+  if (!hasFileId) {
+    rows += diagRow('fail','📄','Sin File ID','Falta el ID del archivo super_estado.json. Ábrelo en Drive, copia el ID de la URL y pégalo en ⚙️.');
+  } else {
+    rows += diagRow('ok','✅','File ID configurado',`${state.driveFileId.slice(0,14)}…${state.driveFileId.slice(-6)}`);
+  }
+  if (syncStatus === 'error') {
+    rows += diagRow('fail','🔴','Última sync fallida','Posible token expirado o File ID incorrecto. Verifica ambos en ⚙️ y prueba "Sync ahora".');
+  } else if (syncStatus === 'ok' && state.lastSync) {
+    const ago = Math.round((Date.now()-state.lastSync)/1000);
+    rows += diagRow('ok','🟢','Sincronización activa',`Última lectura hace ${ago}s. Polling automático cada 10 seg.`);
+  } else if (!hasToken || !hasFileId) {
+    rows += diagRow('fail','⏸️','Sincronización detenida','Completa token y File ID para activar la sync.');
+  }
+  const lsRaw = localStorage.getItem('superLista_v4');
+  if (!lsRaw) {
+    rows += diagRow('warn','💾','localStorage vacío','Guarda la configuración en ⚙️ para inicializar.');
+  } else {
+    const parsed = JSON.parse(lsRaw);
+    const hasId = !!parsed.driveFileId;
+    rows += diagRow(hasId?'ok':'fail','💾',
+      hasId?'LocalStorage OK — File ID guardado':'LocalStorage sin File ID guardado',
+      hasId?`${(lsRaw.length/1024).toFixed(1)} KB. Token y File ID persistidos.`:'El File ID no se guardó en localStorage. Abre ⚙️, pega el File ID y toca "Guardar".'
+    );
+  }
+  const canSync = hasToken && hasFileId;
+  sheet.innerHTML = `
+    <div class="diag-title">🔍 Diagnóstico de sincronización</div>
+    ${rows}
+    ${canSync?`<button class="diag-sync-now" onclick="closeDiag();readFromDrive()">↻ Sincronizar ahora</button>`:''}
+    <button class="diag-fix-btn teal" onclick="closeDiag();toggleDrivePanel()" style="margin-bottom:8px">⚙️ Abrir configuración de Drive</button>
+    <button class="diag-close" onclick="closeDiag()">Cerrar</button>
+  `;
+  document.getElementById('diag-overlay').style.display = 'flex';
+}
+function diagRow(type, icon, title, desc) {
+  return `<div class="diag-row ${type}"><span class="diag-icon">${icon}</span><div class="diag-text"><b>${title}</b><span>${desc}</span></div></div>`;
+}
+function closeDiag() { document.getElementById('diag-overlay').style.display='none'; }
 
 /* ═══════════════════════════════════════
    ADD ITEM FLOW
@@ -1364,6 +1693,30 @@ function showToast(msg) {
 /* ═══════════════════════════════════════
    BOOT
 ═══════════════════════════════════════ */
+
+// Migración: si hay datos en versiones anteriores, importarlos
+(function migrateOldState() {
+  if (localStorage.getItem('superLista_v4')) return; // ya está en v4, nada que migrar
+  const oldKeys = ['superLista_v3', 'superLista_v2', 'superLista_state_v2'];
+  for (const key of oldKeys) {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try {
+        const old = JSON.parse(raw);
+        // Copiar sólo los campos relevantes
+        if (old.driveToken)  state.driveToken  = old.driveToken;
+        if (old.driveFileId) state.driveFileId = old.driveFileId;
+        if (old.checks)      state.checks      = old.checks;
+        if (old.overrides)   state.overrides   = old.overrides;
+        if (old.customItems) state.customItems = old.customItems;
+        if (old.lastSync)    state.lastSync    = old.lastSync;
+        console.log(`[Migración] Importado desde ${key}`);
+        break;
+      } catch(e) {}
+    }
+  }
+})();
+
 load();
 
 // Soporte para shortcuts de manifest.json (?tab=N)
@@ -1381,19 +1734,29 @@ document.querySelectorAll('.tab').forEach((btn, i) => {
   btn.classList.toggle('active', map[i] === activeTab);
 });
 
-if (state.driveToken && state.driveFileId) {
-  startPolling();
-  setTimeout(triggerSync, 600);
-}
+// Mostrar estado de sync correcto desde el primer segundo
+updateSyncUI();
+
+// Manejar callback de OAuth (cuando Google redirige de vuelta con ?code=)
+handleOAuthCallback().then(handled => {
+  if (!handled) {
+    if (state.driveToken && state.driveFileId) {
+      startPolling();
+      setTimeout(triggerSync, 800);
+    } else {
+      syncStatus = 'offline';
+      updateSyncUI();
+    }
+  }
+});
 
 // Sincronizar inmediatamente cuando el usuario regresa a la app
-// (minimizó, cambió de app, apagó pantalla y volvió)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.driveToken && state.driveFileId) {
     readFromDrive();
   }
 });
-// También al recuperar foco en desktop/web
+
 window.addEventListener('focus', () => {
   if (state.driveToken && state.driveFileId) readFromDrive();
 });
@@ -1407,7 +1770,6 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(reg => {
         console.log('[SW] Registrado:', reg.scope);
-        // Escuchar mensajes del SW (background sync)
         navigator.serviceWorker.addEventListener('message', e => {
           if (e.data && e.data.type === 'TRIGGER_SYNC') triggerSync();
         });
