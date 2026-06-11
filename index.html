@@ -729,9 +729,10 @@ async function ensureToken(){
 }
 
 /* ══════════════════════════════════════════════
-   DRIVE SYNC — FIX: leer con fields para obtener
-   la versión del archivo sin descargar el contenido
+   DRIVE SYNC
 ══════════════════════════════════════════════ */
+let lastError = '';   // guarda el último error para diagnóstico
+
 function schedWrite(){
   if(!S.token||!S.fileId) return;
   clearTimeout(writeTmr);
@@ -753,9 +754,18 @@ async function writeToD(){
       `https://www.googleapis.com/upload/drive/v3/files/${S.fileId}?uploadType=media`,
       {method:'PATCH',headers:{'Authorization':'Bearer '+S.token,'Content-Type':'application/json'},body}
     );
-    if(r.ok){ S.lastVer=Date.now(); syncSt='ok'; saveS(); }
-    else { syncSt='err'; console.error('Drive write error',r.status); }
-  } catch(e){ syncSt='err'; }
+    if(r.ok){
+      S.lastVer=Date.now(); syncSt='ok'; lastError=''; saveS();
+    } else {
+      syncSt='err';
+      let errBody='';
+      try{ const j=await r.json(); errBody=j?.error?.message||JSON.stringify(j); }catch(e){}
+      lastError=`WRITE ${r.status}: ${errBody}`;
+    }
+  } catch(e){
+    syncSt='err';
+    lastError='WRITE network error: '+e.message;
+  }
   updateSyncUI();
 }
 
@@ -769,7 +779,15 @@ async function readFromD(){
       {headers:{'Authorization':'Bearer '+S.token,'Cache-Control':'no-cache, no-store'}}
     );
     if(r.ok){
-      const d=await r.json();
+      let d;
+      try{ d=await r.json(); }
+      catch(e){
+        // El archivo no es JSON válido — puede ser que Drive devolvió HTML de error
+        const text=await r.text().catch(()=>'');
+        syncSt='err';
+        lastError='READ: respuesta no es JSON. Contenido: '+text.slice(0,120);
+        updateSyncUI(); return;
+      }
       const driveVer=d.version||0;
       if(driveVer>S.lastVer){
         if(d.checks)      S.checks      = d.checks;
@@ -780,12 +798,17 @@ async function readFromD(){
         buildStores(); saveS(); render();
         toast('🔄 Lista actualizada desde el otro dispositivo');
       }
-      syncSt='ok';
+      syncSt='ok'; lastError='';
     } else {
+      let errBody='';
+      try{ const j=await r.json(); errBody=j?.error?.message||JSON.stringify(j); }catch(e){}
       syncSt='err';
-      console.error('Drive read error',r.status);
+      lastError=`READ ${r.status}: ${errBody}`;
     }
-  } catch(e){ syncSt='err'; }
+  } catch(e){
+    syncSt='err';
+    lastError='READ network error: '+e.message;
+  }
   updateSyncUI();
 }
 
@@ -809,7 +832,9 @@ function updateSyncUI(){
   } else if(syncSt==='busy'){
     dot.classList.add('spin'); lbl.textContent='Sincronizando…';
   } else if(syncSt==='err'){
-    dot.classList.add('err'); lbl.textContent='⚠️ Error — toca para reconectar';
+    dot.classList.add('err');
+    // Mostrar el error exacto en la barra para diagnóstico
+    lbl.textContent = lastError ? '⚠️ '+lastError.slice(0,60) : '⚠️ Error — toca ⚙️';
   } else {
     lbl.textContent='⚙️ Toca para configurar Drive';
   }
@@ -832,10 +857,17 @@ function renderCfg(){
   else if(!hasFid) st=`<div class="status-row fail"><span style="font-size:16px">❌</span><div><b>Falta el File ID</b><span>Sube super_estado.json a Drive y pega su ID.</span></div></div>`;
   else if(!hasTok) st=`<div class="status-row warn"><span style="font-size:16px">🔑</span><div><b>Token expirado</b><span>Toca "Conectar con Google" para renovar.</span></div></div>`;
 
+  // Mostrar error detallado si existe
+  const errHtml = lastError ? `<div class="status-row fail" style="margin-top:6px">
+    <span style="font-size:16px">🔍</span>
+    <div><b>Error detallado</b><span style="font-family:monospace;font-size:11px;word-break:break-all">${lastError}</span></div>
+  </div>` : '';
+
   document.getElementById('cfg-sheet').innerHTML=`
     <div class="sheet-title">⚙️ Configuración de Drive</div>
     <div class="sheet-sub">Sincroniza la lista entre tus dispositivos.</div>
     ${st}
+    ${errHtml}
     <div class="cfg-section">1 · Client ID de Google Cloud</div>
     <div class="field">
       <div class="field-lbl">Client ID</div>
