@@ -687,7 +687,8 @@ function initGIS(){
   if(!S.clientId||!window.google?.accounts) return;
   tokenClient=google.accounts.oauth2.initTokenClient({
     client_id:S.clientId,
-    scope:'https://www.googleapis.com/auth/drive.file',
+    // drive = acceso completo a Drive, necesario para archivos subidos manualmente
+    scope:'https://www.googleapis.com/auth/drive',
     callback:(resp)=>{
       if(resp.error){ toast('❌ Error: '+resp.error); syncSt='err'; updateSyncUI(); return; }
       S.token=resp.access_token; S.tokenAt=Date.now();
@@ -709,8 +710,9 @@ function tokenExpired(){ return !S.token||!S.tokenAt||(Date.now()-S.tokenAt)>55*
 async function ensureToken(){
   if(!tokenExpired()) return true;
   if(!S.clientId) return false;
+  // Reinicializar GIS con scope correcto antes de renovar
+  tokenClient=null; initGIS();
   return new Promise(resolve=>{
-    if(!tokenClient) initGIS();
     if(!tokenClient){ resolve(false); return; }
     const orig=tokenClient.callback;
     tokenClient.callback=(resp)=>{
@@ -882,7 +884,8 @@ function renderCfg(){
     </div>
     <div class="cfg-section">3 · Autorizar</div>
     <div style="font-size:12px;color:var(--text2);background:var(--ax);border-radius:var(--radx);padding:9px 11px;margin-bottom:10px;font-weight:500;line-height:1.5">
-      ⚠️ Elige la cuenta que tiene el <b>super_estado.json</b> en Drive y que está en los <b>Usuarios de prueba</b> de Google Cloud.
+      ⚠️ Elige la cuenta que tiene el <b>super_estado.json</b> en Drive.<br>
+      Si ya conectaste antes, toca <b>"Reconectar"</b> para aplicar el nuevo permiso de acceso a Drive.
     </div>
     <button class="btn-primary" onclick="saveCfgAndAuth()">
       ${connected?'↻ Reconectar con Google':'🔑 Guardar y conectar con Google'}
